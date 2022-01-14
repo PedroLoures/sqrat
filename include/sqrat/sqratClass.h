@@ -581,16 +581,28 @@ protected:
     void InitClass(ClassData<C>* cd) {
         cd->instances = SharedPtr<typename unordered_map<C*, ObjectReferenceBase*>::type>(new typename unordered_map<C*, ObjectReferenceBase*>::type);
 
+        SQFUNCTION overload = SqOverloadFunc(A::New);
+        string overloadName = SqOverloadName::Get(_SC("constructor"), 0);
+
         // push the class
         sq_pushobject(vm, cd->classObj);
 
         // set the typetag of the class
         sq_settypetag(vm, -1, cd->staticData.get());
 
-        // add the default constructor
+        // add the default constructor overload handler
         sq_pushstring(vm, _SC("constructor"), -1);
-        sq_newclosure(vm, &A::New, 0);
+        sq_pushstring(vm, _SC("constructor"), -1); // function name is passed as a free variable
+        sq_newclosure(vm, overload, 1);
         sq_newslot(vm, -3, false);
+
+        // Bind overloaded allocator function (if there is a default constructor)
+        if (is_default_constructible<C>::value) {
+            sq_pushstring(vm, overloadName.c_str(), -1);
+            sq_newclosure(vm, A::New, 0);
+            sq_setparamscheck(vm, 1, NULL);
+            sq_newslot(vm, -3, false);
+        }
 
         // add the set table (static)
         HSQOBJECT& setTable = cd->setTable;
@@ -980,16 +992,28 @@ protected:
     void InitDerivedClass(HSQUIRRELVM vm, ClassData<C>* cd, ClassData<B>* bd) {
         cd->instances = SharedPtr<typename unordered_map<C*, ObjectReferenceBase*>::type>(new typename unordered_map<C*, ObjectReferenceBase*>::type);
 
+        SQFUNCTION overload = SqOverloadFunc(A::New);
+        string overloadName = SqOverloadName::Get(_SC("constructor"), 0);
+
         // push the class
         sq_pushobject(vm, cd->classObj);
 
         // set the typetag of the class
         sq_settypetag(vm, -1, cd->staticData.get());
 
-        // add the default constructor
+        // add the default constructor overload handler
         sq_pushstring(vm, _SC("constructor"), -1);
-        sq_newclosure(vm, &A::New, 0);
+        sq_pushstring(vm, _SC("constructor"), -1); // function name is passed as a free variable
+        sq_newclosure(vm, overload, 1);
         sq_newslot(vm, -3, false);
+
+        // Bind overloaded allocator function (if there is a default constructor)
+        if (is_default_constructible<C>::value) {
+            sq_pushstring(vm, overloadName.c_str(), -1);
+            sq_newclosure(vm, A::New, 0);
+            sq_setparamscheck(vm, 1, NULL);
+            sq_newslot(vm, -3, false);
+        }
 
         // clone the base classes set table (static)
         HSQOBJECT& setTable = cd->setTable;

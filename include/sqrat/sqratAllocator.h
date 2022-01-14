@@ -92,6 +92,14 @@ class DefaultAllocator {
 
 public:
 
+    static void RegisterTypeIndexCasts() {
+        auto shared_ptr_cast = new StaticClassSharedPtrTypeCast<C>();
+
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(C)), new StaticClassTypeCast<C>(shared_ptr_cast));
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(C*)), new StaticClassTypeCast<C*>(shared_ptr_cast));
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(SharedPtr<C>)), shared_ptr_cast);
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// Associates a newly created instance with an object allocated with the new operator (which is automatically deleted)
     ///
@@ -395,6 +403,13 @@ template<class C>
 class NoConstructor {
 public:
 
+    static void RegisterTypeIndexCasts() {
+        auto shared_ptr_cast = new StaticClassSharedPtrTypeCast<C>();
+
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(C*)), new StaticClassTypeCast<C*>(shared_ptr_cast));
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(SharedPtr<C>)), shared_ptr_cast);
+    }
+
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// Associates a newly created instance with an object allocated with the new operator (which is automatically deleted)
     ///
@@ -484,6 +499,13 @@ public:
 template<class C>
 class CopyOnly {
 public:
+
+    static void RegisterTypeIndexCasts() {
+        auto shared_ptr_cast = new StaticClassSharedPtrTypeCast<C>();
+
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(C*)), new StaticClassTypeCast<C*>(shared_ptr_cast));
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(SharedPtr<C>)), shared_ptr_cast);
+    }
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /// Associates a newly created instance with an object allocated with the new operator (which is automatically deleted)
@@ -575,6 +597,14 @@ public:
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 template<class C>
 class NoCopy {
+
+    static void RegisterTypeIndexCasts() {
+        auto shared_ptr_cast = new StaticClassSharedPtrTypeCast<C>();
+
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(C)), new StaticClassTypeCast<C>(shared_ptr_cast));
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(C*)), new StaticClassTypeCast<C*>(shared_ptr_cast));
+        ClassTypeCasts::get_set_cast(std::type_index(typeid(SharedPtr<C>)), shared_ptr_cast);
+    }
 
     template <class T, bool b>
     struct NewC

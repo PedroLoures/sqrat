@@ -651,6 +651,8 @@ protected:
 
         // pop the class
         sq_pop(vm, 1);
+
+        A::RegisterTypeIndexCasts();
     }
 
     // Helper function used to bind getters and setters
@@ -1066,6 +1068,8 @@ protected:
 
         // pop the class
         sq_pop(vm, 1);
+
+        A::RegisterTypeIndexCasts();
     }
 
 /// @endcond

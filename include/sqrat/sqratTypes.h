@@ -36,6 +36,8 @@
 #include <squirrel.h>
 #include <sqstdblob.h>
 #include <string>
+#include <typeindex>
+#include <unordered_map>
 #include <vector>
 
 #ifndef SQRAT_EXTRA_TYPES_INCLUDE
@@ -1333,6 +1335,115 @@ SCRAT_MAKE_NONREFERENCABLE(signed __int64)
 SCRAT_MAKE_NONREFERENCABLE(std::string)
 #endif
 
+struct ClassTypeCasts {
+    ClassTypeCasts(ClassTypeCasts *_shared_ptr_cast) : shared_ptr_cast(_shared_ptr_cast) { }
+    virtual ~ClassTypeCasts() { }
+
+    virtual void push_ptr(HSQUIRRELVM vm, void* value) const = 0;
+    virtual void push_ptr(HSQUIRRELVM vm, const void* value) const = 0;
+    virtual void push_const_ref(HSQUIRRELVM vm, const void* value) const = 0;
+
+    static const ClassTypeCasts* get_set_cast(std::type_index idx, ClassTypeCasts *pCast = nullptr) {
+        static std::unordered_map<std::type_index, ClassTypeCasts*> casts;
+
+        auto it = casts.find(idx);
+
+        if (pCast) {
+            if (it != casts.end()) {
+                delete it->second;
+                casts.erase(it);
+            }
+
+            casts[idx] = pCast;
+        } else {
+            if (it != casts.end()) {
+                pCast = it->second;
+            }
+        }
+
+        return pCast;
+    }
+
+    ClassTypeCasts *shared_ptr_cast;
+};
+
+template <typename T>
+struct StaticClassTypeCast : public ClassTypeCasts {
+    StaticClassTypeCast(ClassTypeCasts *_shared_ptr_cast) : ClassTypeCasts(_shared_ptr_cast)  { }
+    ~StaticClassTypeCast() override { }
+
+    void push_ptr(HSQUIRRELVM vm, void* value) const override {
+        Var<T*>::push(vm, (T*)value);
+    }
+
+    void push_ptr(HSQUIRRELVM vm, const void* value) const override {
+        Var<const T*>::push(vm, (const T*)value);
+    }
+
+    void push_const_ref(HSQUIRRELVM vm, const void* value) const override {
+        Var<T>::push(vm, *((const T*)value));
+    }
+};
+
+template <typename T>
+struct StaticClassSharedPtrTypeCast : public ClassTypeCasts {
+    StaticClassSharedPtrTypeCast() : ClassTypeCasts(nullptr)  { }
+    ~StaticClassSharedPtrTypeCast() override { }
+
+    void push_ptr(HSQUIRRELVM vm, void* value) const override {
+        auto pObject = ((SharedPtr<T>*)value)->get();
+
+        if(!pObject) {
+            Var<SharedPtr<T>*>::push(vm, (SharedPtr<T>*)value);
+            return;
+        }
+
+        auto typeIndex = std::type_index(typeid(*pObject));
+        auto pCast = ClassTypeCasts::get_set_cast(typeIndex);
+
+        if (pCast && pCast->shared_ptr_cast && pCast->shared_ptr_cast != this) {
+            pCast->shared_ptr_cast->push_ptr(vm, value);
+        } else {
+            Var<SharedPtr<T>*>::push(vm, (SharedPtr<T>*)value);
+        }
+    }
+
+    void push_ptr(HSQUIRRELVM vm, const void* value) const override {
+        auto pObject = ((const SharedPtr<T>*)value)->get();
+
+        if(!pObject) {
+            Var<const SharedPtr<T>*>::push(vm, (const SharedPtr<T>*)value);
+            return;
+        }
+
+        auto typeIndex = std::type_index(typeid(*pObject));
+        auto pCast = ClassTypeCasts::get_set_cast(typeIndex);
+
+        if (pCast && pCast->shared_ptr_cast && pCast->shared_ptr_cast != this) {
+            pCast->shared_ptr_cast->push_ptr(vm, value);
+        } else {
+            Var<const SharedPtr<T>*>::push(vm, (const SharedPtr<T>*)value);
+        }
+    }
+
+    void push_const_ref(HSQUIRRELVM vm, const void* value) const override {
+        auto pObject = ((const SharedPtr<T>*)value)->get();
+
+        if(!pObject) {
+            Var<SharedPtr<T>>::push(vm, *(const SharedPtr<T>*)value);
+            return;
+        }
+
+        auto typeIndex = std::type_index(typeid(*pObject));
+        auto pCast = ClassTypeCasts::get_set_cast(typeIndex);
+
+        if (pCast && pCast->shared_ptr_cast && pCast->shared_ptr_cast != this) {
+            pCast->shared_ptr_cast->push_const_ref(vm, value);
+        } else {
+            Var<SharedPtr<T>>::push(vm, *(const SharedPtr<T>*)value);
+        }
+    }
+};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Pushes a value on to a given VM's stack
@@ -1350,7 +1461,14 @@ SCRAT_MAKE_NONREFERENCABLE(std::string)
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 template<class T>
 inline void PushVar(HSQUIRRELVM vm, T* value) {
-    Var<T*>::push(vm, value);
+    auto typeIndex = std::type_index(typeid(*value));
+    auto pCast = ClassTypeCasts::get_set_cast(typeIndex);
+
+    if (pCast) {
+        pCast->push_ptr(vm, value);
+    } else {
+        Var<T*>::push(vm, value);
+    }
 }
 
 
@@ -1370,7 +1488,14 @@ inline void PushVar(HSQUIRRELVM vm, T* value) {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 template<class T>
 inline void PushVar(HSQUIRRELVM vm, const T& value) {
-    Var<T>::push(vm, value);
+    auto typeIndex = std::type_index(typeid(value));
+    auto pCast = ClassTypeCasts::get_set_cast(typeIndex);
+
+    if (pCast) {
+        pCast->push_const_ref(vm, &value);
+    } else {
+        Var<T>::push(vm, value);
+    }
 }
 
 
@@ -1407,7 +1532,7 @@ struct PushVarR_helper<T, false> {
 template<class T>
 inline void PushVarR(HSQUIRRELVM vm, T& value) {
     if (!is_pointer<T>::value && is_referencable<typename remove_cv<T>::type>::value) {
-        Var<T&>::push(vm, value);
+        PushVar<T&>(vm, value);
     } else {
         PushVarR_helper<T, is_pointer<T>::value>::push(vm, value);
     }
